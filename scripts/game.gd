@@ -17,6 +17,9 @@ func _ready() -> void:
 	player.team = GameState.Team.CT
 	add_child(player)
 	player.global_position = map.ct_spawns[0]
+	# Временный арсенал для проверки стрельбы (до этапа экономики).
+	player.give_weapon("usp")
+	player.give_weapon("ak47")
 
 
 func _unhandled_input(event: InputEvent) -> void:
