@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CS3 — Browser Strike</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000;
+      font-family: 'Segoe UI', Arial, sans-serif; user-select: none; }
+    canvas { display: block; }
+
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+
+    /* прицел */
+    #crosshair { position: absolute; left: 50%; top: 50%; --gap: 6px; }
+    #crosshair span { position: absolute; background: #3cff5a; box-shadow: 0 0 2px #000; }
+    #crosshair .t { width: 2px; height: 8px; left: -1px; top: calc(-1 * var(--gap) - 8px); }
+    #crosshair .b { width: 2px; height: 8px; left: -1px; top: var(--gap); }
+    #crosshair .l { width: 8px; height: 2px; top: -1px; left: calc(-1 * var(--gap) - 8px); }
+    #crosshair .r { width: 8px; height: 2px; top: -1px; left: var(--gap); }
+
+    #hitmarker { position: absolute; left: 50%; top: 50%; display: none; }
+    #hitmarker span { position: absolute; width: 10px; height: 2px; background: #fff; }
+    #hitmarker.head span { background: #ff4040; }
+    #hitmarker span:nth-child(1) { transform: translate(-12px, -8px) rotate(45deg); }
+    #hitmarker span:nth-child(2) { transform: translate(2px, -8px) rotate(-45deg); }
+    #hitmarker span:nth-child(3) { transform: translate(-12px, 6px) rotate(-45deg); }
+    #hitmarker span:nth-child(4) { transform: translate(2px, 6px) rotate(45deg); }
+
+    #damage-vignette { position: absolute; inset: 0; opacity: 0; transition: opacity .25s;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(200,0,0,.45) 100%); }
+
+    #scope { position: absolute; inset: 0; display: none;
+      background: radial-gradient(circle at 50% 50%, transparent 0 26%, rgba(0,0,0,.97) 27%); }
+    #scope::before, #scope::after { content: ''; position: absolute; background: rgba(0,0,0,.8); }
+    #scope::before { left: 0; right: 0; top: 50%; height: 1px; }
+    #scope::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+
+    .panel-box { background: rgba(10, 12, 16, .55); border-radius: 6px; padding: 8px 14px;
+      color: #e8e4d8; text-shadow: 0 1px 2px #000; }
+
+    #hp-box { position: absolute; left: 18px; bottom: 16px; font-size: 30px; font-weight: 700; }
+    #hp-box.low #hp { color: #ff5040; }
+    #hp-box small { font-size: 13px; opacity: .7; margin-left: 4px; }
+
+    #speed { position: absolute; left: 18px; bottom: 66px; font-size: 13px; opacity: .75;
+      color: #cfe8cf; padding: 4px 10px; }
+    #speed.fast { color: #6cff8a; }
+
+    #ammo-box { position: absolute; right: 18px; bottom: 16px; text-align: right; }
+    #ammo { font-size: 34px; font-weight: 700; }
+    #reserve { font-size: 16px; opacity: .7; margin-left: 6px; }
+    #wname { font-size: 13px; opacity: .8; letter-spacing: 1px; text-transform: uppercase; }
+
+    #weapon-list { position: absolute; right: 18px; bottom: 96px; display: flex;
+      flex-direction: column; gap: 4px; }
+    #weapon-list div { font-size: 12px; padding: 3px 10px; border-radius: 4px;
+      background: rgba(10,12,16,.4); color: #999; }
+    #weapon-list div.active { background: rgba(230,170,40,.75); color: #111; font-weight: 700; }
+
+    #killfeed { position: absolute; right: 18px; top: 16px; text-align: right;
+      display: flex; flex-direction: column; gap: 4px; }
+    .kf-entry { font-size: 13px; background: rgba(10,12,16,.6); color: #eee;
+      padding: 4px 10px; border-radius: 4px; }
+    .kf-entry b { color: #ffb340; }
+
+    #score { position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+      font-size: 15px; font-weight: 600; }
+
+    #scoreboard { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      display: none; min-width: 340px; }
+    #scoreboard h3 { margin-bottom: 8px; color: #ffb340; }
+    #scoreboard table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    #scoreboard th, #scoreboard td { padding: 4px 12px; text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,.12); }
+    #scoreboard tr.me td { color: #6cff8a; font-weight: 700; }
+
+    #death-screen { position: absolute; inset: 0; display: none; text-align: center;
+      background: rgba(60,0,0,.35); color: #fff; padding-top: 38vh; }
+    #death-screen h2 { font-size: 42px; text-shadow: 0 2px 6px #000; }
+    #death-text { margin-top: 10px; font-size: 16px; opacity: .85; }
+
+    /* меню */
+    #menu { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center;
+      justify-content: center; background: linear-gradient(160deg, #17140d, #2c2416 60%, #17140d);
+      color: #e8e4d8; }
+    #menu .panel { text-align: center; max-width: 560px; padding: 30px; }
+    #menu h1 { font-size: 44px; letter-spacing: 4px; color: #ffb340; text-shadow: 0 3px 10px #000; }
+    #menu .sub { margin: 8px 0 26px; opacity: .7; }
+    #menu .row { margin: 14px 0; font-size: 15px; }
+    .diff-btn { pointer-events: auto; cursor: pointer; margin: 0 4px; padding: 8px 18px;
+      border: 1px solid #6b5a35; background: rgba(0,0,0,.3); color: #cfc7b0;
+      border-radius: 4px; font-size: 14px; }
+    .diff-btn.active { background: #ffb340; color: #1a1408; font-weight: 700; border-color: #ffb340; }
+    #sens { vertical-align: middle; width: 180px; accent-color: #ffb340; cursor: pointer; }
+    #play { cursor: pointer; margin-top: 22px; padding: 14px 60px; font-size: 20px;
+      font-weight: 700; letter-spacing: 2px; background: #ffb340; color: #1a1408;
+      border: none; border-radius: 4px; }
+    #play:hover { background: #ffc668; }
+    #menu .help { margin-top: 26px; font-size: 12.5px; line-height: 1.9; opacity: .65; text-align: left; }
+    #menu .help b { color: #ffb340; }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div id="crosshair"><span class="t"></span><span class="b"></span><span class="l"></span><span class="r"></span></div>
+    <div id="hitmarker"><span></span><span></span><span></span><span></span></div>
+    <div id="damage-vignette"></div>
+    <div id="scope"></div>
+    <div id="speed">0 u/s</div>
+    <div id="hp-box" class="panel-box"><span id="hp">100</span><small>HP</small></div>
+    <div id="ammo-box" class="panel-box">
+      <span id="ammo">30</span><span id="reserve">/ 90</span>
+      <div id="wname">AK-47</div>
+    </div>
+    <div id="weapon-list">
+      <div>1 · Нож</div>
+      <div>2 · USP-S</div>
+      <div class="active">3 · AK-47</div>
+      <div>4 · AWP</div>
+    </div>
+    <div id="killfeed"></div>
+    <div id="score" class="panel-box">У: 0  С: 0</div>
+    <div id="scoreboard" class="panel-box"></div>
+    <div id="death-screen"><h2>ВЫ ПОГИБЛИ</h2><div id="death-text"></div></div>
+  </div>
+
+  <div id="menu">
+    <div class="panel">
+      <h1>CS3 · BROWSER STRIKE</h1>
+      <p class="sub">Карта в духе de_dust2 · боты · распрыжка · точки закладки A и B</p>
+      <div class="row">
+        Сложность ботов:
+        <button class="diff-btn" data-diff="easy">Лёгкая</button>
+        <button class="diff-btn active" data-diff="normal">Средняя</button>
+        <button class="diff-btn" data-diff="hard">Сложная</button>
+      </div>
+      <div class="row">
+        Чувствительность: <input id="sens" type="range" min="0.2" max="3" step="0.1" value="1" />
+        <span id="sens-val">1.0</span>
+      </div>
+      <button id="play">▶ ИГРАТЬ</button>
+      <div class="help">
+        <b>WASD</b> — движение · <b>Мышь</b> — прицел · <b>ЛКМ</b> — огонь · <b>ПКМ</b> — прицел AWP<br/>
+        <b>Пробел</b> — прыжок (держите для распрыжки) · <b>Ctrl / C</b> — присед · <b>Shift</b> — тихий шаг<br/>
+        <b>1–4</b> — оружие (нож, USP-S, AK-47, AWP) · <b>R</b> — перезарядка · <b>Tab</b> — счёт · <b>Esc</b> — меню
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
