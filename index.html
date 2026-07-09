@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CS3 — Browser Strike</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>💣</text></svg>" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000;
@@ -43,10 +44,71 @@
     #hp-box { position: absolute; left: 18px; bottom: 16px; font-size: 30px; font-weight: 700; }
     #hp-box.low #hp { color: #ff5040; }
     #hp-box small { font-size: 13px; opacity: .7; margin-left: 4px; }
+    #hp-box .armor-wrap { font-size: 20px; color: #9fc4e8; margin-left: 12px; }
+    #hp-box .armor-wrap small { font-size: 12px; }
 
-    #speed { position: absolute; left: 18px; bottom: 66px; font-size: 13px; opacity: .75;
+    #money { position: absolute; left: 18px; bottom: 76px; font-size: 20px; font-weight: 700;
+      color: #7ce08a; padding: 4px 12px; }
+
+    #speed { position: absolute; left: 18px; bottom: 118px; font-size: 13px; opacity: .75;
       color: #cfe8cf; padding: 4px 10px; }
     #speed.fast { color: #6cff8a; }
+
+    /* верхняя панель: счёт и таймер */
+    #topbar { position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 10px; text-align: center; }
+    #topbar .side { font-size: 11px; opacity: .75; letter-spacing: 1px; }
+    #topbar .sc { font-size: 22px; font-weight: 700; min-width: 30px; }
+    #score-my { color: #6cff8a; }
+    #score-enemy { color: #ff7a6a; }
+    #timer { font-size: 22px; font-weight: 700; min-width: 64px; }
+    #timer.bomb { color: #ff4030; }
+    #timer.freeze { opacity: .55; }
+    #round-num { position: absolute; left: 50%; top: 58px; transform: translateX(-50%);
+      font-size: 11.5px; opacity: .6; letter-spacing: 1px; }
+
+    /* радар */
+    #radar { position: absolute; left: 14px; top: 14px; width: 168px; height: 168px;
+      border: 1px solid rgba(255,255,255,.18); border-radius: 6px; }
+
+    /* баннер по центру */
+    #banner { position: absolute; left: 50%; top: 24%; transform: translateX(-50%);
+      display: none; text-align: center; pointer-events: none; }
+    #banner #banner-title { font-size: 34px; font-weight: 800; color: #ffd780;
+      text-shadow: 0 2px 8px #000; letter-spacing: 1px; }
+    #banner.win #banner-title { color: #6cff8a; }
+    #banner.lose #banner-title { color: #ff6a5a; }
+    #banner #banner-sub { margin-top: 6px; font-size: 15px; color: #eee;
+      text-shadow: 0 1px 4px #000; opacity: .9; }
+
+    /* прогресс установки/разминирования */
+    #progress { position: absolute; left: 50%; bottom: 30%; transform: translateX(-50%);
+      display: none; width: 280px; text-align: center; }
+    #progress-label { font-size: 14px; color: #ffe4b0; text-shadow: 0 1px 3px #000; margin-bottom: 6px; }
+    #progress-bar { height: 10px; background: rgba(0,0,0,.55); border-radius: 5px;
+      border: 1px solid rgba(255,255,255,.25); overflow: hidden; }
+    #progress-fill { height: 100%; width: 0; background: #ffb340; }
+
+    /* подсказка по бомбе */
+    #bomb-hint { position: absolute; left: 50%; bottom: 24%; transform: translateX(-50%);
+      display: none; font-size: 14.5px; color: #ffe4b0; text-shadow: 0 1px 4px #000;
+      background: rgba(10,12,16,.55); padding: 6px 16px; border-radius: 5px; }
+
+    /* меню закупки */
+    #buy-menu { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      display: none; min-width: 300px; padding: 16px 20px; }
+    #buy-menu h3 { color: #ffb340; margin-bottom: 4px; }
+    #buy-money { font-size: 15px; color: #7ce08a; font-weight: 700; margin-bottom: 10px; }
+    .buy-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+      margin: 4px 0; background: rgba(255,255,255,.06); border-radius: 4px; font-size: 15px; }
+    .buy-item .bkey { background: #ffb340; color: #1a1408; font-weight: 700; width: 22px;
+      height: 22px; border-radius: 3px; text-align: center; line-height: 22px; font-size: 13px; }
+    .buy-item .bprice { margin-left: auto; color: #7ce08a; }
+    .buy-item.poor { opacity: .45; }
+    .buy-item.poor .bprice { color: #ff8070; }
+    .buy-item.owned { opacity: .55; }
+    .buy-item.owned .bprice { color: #aaa; }
+    #buy-menu .buy-help { margin-top: 10px; font-size: 12px; opacity: .6; }
 
     #ammo-box { position: absolute; right: 18px; bottom: 16px; text-align: right; }
     #ammo { font-size: 34px; font-weight: 700; }
@@ -65,12 +127,11 @@
       padding: 4px 10px; border-radius: 4px; }
     .kf-entry b { color: #ffb340; }
 
-    #score { position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
-      font-size: 15px; font-weight: 600; }
-
     #scoreboard { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-      display: none; min-width: 340px; }
-    #scoreboard h3 { margin-bottom: 8px; color: #ffb340; }
+      display: none; min-width: 400px; max-height: 76vh; overflow-y: auto; }
+    #scoreboard h3 { margin: 10px 0 6px; }
+    #scoreboard h3.my { color: #6cff8a; }
+    #scoreboard h3.enemy { color: #ff8070; }
     #scoreboard table { width: 100%; border-collapse: collapse; font-size: 14px; }
     #scoreboard th, #scoreboard td { padding: 4px 12px; text-align: left;
       border-bottom: 1px solid rgba(255,255,255,.12); }
@@ -80,6 +141,19 @@
       background: rgba(60,0,0,.35); color: #fff; padding-top: 38vh; }
     #death-screen h2 { font-size: 42px; text-shadow: 0 2px 6px #000; }
     #death-text { margin-top: 10px; font-size: 16px; opacity: .85; }
+
+    /* конец матча */
+    #gameover { position: absolute; inset: 0; display: none; flex-direction: column;
+      align-items: center; justify-content: center; background: rgba(8, 8, 12, .82);
+      pointer-events: auto; }
+    #gameover-title { font-size: 54px; font-weight: 800; letter-spacing: 6px;
+      text-shadow: 0 3px 12px #000; }
+    #gameover-title.win { color: #6cff8a; }
+    #gameover-title.lose { color: #ff6a5a; }
+    #gameover-score { margin: 14px 0 30px; font-size: 26px; color: #eee; }
+    #to-menu { cursor: pointer; padding: 12px 44px; font-size: 17px; font-weight: 700;
+      background: #ffb340; color: #1a1408; border: none; border-radius: 4px; }
+    #to-menu:hover { background: #ffc668; }
 
     /* меню */
     #menu { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center;
@@ -109,27 +183,51 @@
     <div id="damage-vignette"></div>
     <div id="scope"></div>
     <div id="speed">0 u/s</div>
-    <div id="hp-box" class="panel-box"><span id="hp">100</span><small>HP</small></div>
+    <div id="money" class="panel-box">$800</div>
+    <div id="hp-box" class="panel-box">
+      <span id="hp">100</span><small>HP</small>
+      <span class="armor-wrap"><span id="armor">0</span><small>БР</small></span>
+    </div>
     <div id="ammo-box" class="panel-box">
-      <span id="ammo">30</span><span id="reserve">/ 90</span>
-      <div id="wname">AK-47</div>
+      <span id="ammo">12</span><span id="reserve">/ 24</span>
+      <div id="wname">USP-S</div>
     </div>
-    <div id="weapon-list">
-      <div>1 · Нож</div>
-      <div>2 · USP-S</div>
-      <div class="active">3 · AK-47</div>
-      <div>4 · AWP</div>
-    </div>
+    <div id="weapon-list"></div>
     <div id="killfeed"></div>
-    <div id="score" class="panel-box">У: 0  С: 0</div>
+    <canvas id="radar" width="168" height="168"></canvas>
+    <div id="topbar" class="panel-box">
+      <span class="side" id="side-my">T (вы)</span>
+      <span class="sc" id="score-my">0</span>
+      <span id="timer">1:55</span>
+      <span class="sc" id="score-enemy">0</span>
+      <span class="side" id="side-enemy">CT</span>
+    </div>
+    <div id="round-num">Раунд 1</div>
+    <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+    <div id="progress">
+      <div id="progress-label"></div>
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+    </div>
+    <div id="bomb-hint"></div>
+    <div id="buy-menu" class="panel-box">
+      <h3>Закупка</h3>
+      <div id="buy-money">$800</div>
+      <div id="buy-items"></div>
+      <div class="buy-help">Клавиши 1–3 — купить · B — закрыть · окно закупки: начало раунда</div>
+    </div>
     <div id="scoreboard" class="panel-box"></div>
     <div id="death-screen"><h2>ВЫ ПОГИБЛИ</h2><div id="death-text"></div></div>
+    <div id="gameover">
+      <div id="gameover-title"></div>
+      <div id="gameover-score"></div>
+      <button id="to-menu">В главное меню</button>
+    </div>
   </div>
 
   <div id="menu">
     <div class="panel">
       <h1>CS3 · BROWSER STRIKE</h1>
-      <p class="sub">Карта в духе de_dust2 · боты · распрыжка · точки закладки A и B</p>
+      <p class="sub">Раунды с закладкой бомбы · экономика · до 13 побед · смена сторон после 12 раундов</p>
       <div class="row">
         Сложность ботов:
         <button class="diff-btn" data-diff="easy">Лёгкая</button>
@@ -144,7 +242,8 @@
       <div class="help">
         <b>WASD</b> — движение · <b>Мышь</b> — прицел · <b>ЛКМ</b> — огонь · <b>ПКМ</b> — прицел AWP<br/>
         <b>Пробел</b> — прыжок (держите для распрыжки) · <b>Ctrl / C</b> — присед · <b>Shift</b> — тихий шаг<br/>
-        <b>1–4</b> — оружие (нож, USP-S, AK-47, AWP) · <b>R</b> — перезарядка · <b>Tab</b> — счёт · <b>Esc</b> — меню
+        <b>1–4</b> — оружие · <b>R</b> — перезарядка · <b>B</b> — закупка · <b>E</b> — установка/разминирование бомбы<br/>
+        <b>Tab</b> — табло · <b>Esc</b> — меню · за террористов ставьте бомбу на точке A/B, за спецназ — защищайте
       </div>
     </div>
   </div>

@@ -99,6 +99,8 @@ export function raySphere(o, d, center, r) {
 }
 
 // Дистанция до ближайшего препятствия мира (стены, ящики, пол) вдоль луча.
+// Перед точным тестом AABB коллайдер отбраковывается по описанной сфере —
+// это отсекает большинство ящиков без дорогих делений в rayAABB.
 export function raycastWorld(o, d, maxDist, colliders) {
   let best = maxDist;
   if (d.y < 0) {
@@ -106,6 +108,13 @@ export function raycastWorld(o, d, maxDist, colliders) {
     if (t >= 0 && t < best) best = t;
   }
   for (const c of colliders) {
+    if (c.center) {
+      const cx = c.center.x - o.x, cy = c.center.y - o.y, cz = c.center.z - o.z;
+      const tp = cx * d.x + cy * d.y + cz * d.z; // проекция центра на луч
+      if (tp - c.radius > best || tp + c.radius < 0) continue; // дальше лучшего или сзади
+      const dsq = cx * cx + cy * cy + cz * cz - tp * tp; // расстояние от оси луча
+      if (dsq > c.radius * c.radius) continue;
+    }
     const t = rayAABB(o, d, c.min, c.max);
     if (t >= 0 && t < best) best = t;
   }

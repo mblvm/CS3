@@ -59,7 +59,9 @@ export class WeaponSystem {
     for (const k of ['usp', 'ak', 'awp']) {
       this.state[k] = { ammo: WEAPONS[k].mag, reserve: WEAPONS[k].reserve };
     }
-    this.currentKey = 'ak';
+    // нож и пистолет всегда при себе, остальное покупается
+    this.owned = { knife: true, usp: true, ak: false, awp: false };
+    this.currentKey = 'usp';
     this.reloadT = 0;
     this.switchT = 0.4;
     this.fireT = 0;
@@ -72,7 +74,7 @@ export class WeaponSystem {
     this._buildViewModels();
     this._kick = 0;
     this._time = 0;
-    this.hud.setWeapon(this.weapon.name, this.weapon.slot);
+    this._syncWeaponHud();
     this._syncAmmoHud();
   }
 
@@ -134,7 +136,7 @@ export class WeaponSystem {
 
   selectSlot(n) {
     const key = Object.keys(WEAPONS).find(k => WEAPONS[k].slot === n);
-    if (!key || key === this.currentKey) return;
+    if (!key || key === this.currentKey || !this.owned[key]) return;
     this.models[this.currentKey].visible = false;
     this.currentKey = key;
     this.models[key].visible = true;
@@ -142,8 +144,53 @@ export class WeaponSystem {
     this.reloadT = 0;
     this.shotIndex = 0;
     this._setScope(false);
-    this.hud.setWeapon(this.weapon.name, this.weapon.slot);
+    this._syncWeaponHud();
     this._syncAmmoHud();
+  }
+
+  _syncWeaponHud() {
+    this.hud.setWeapon(this.weapon.name, this.weapon.slot);
+    this.hud.setWeapons(Object.values(WEAPONS).map((w) => ({
+      slot: w.slot,
+      name: w.name,
+      owned: !!this.owned[w.key],
+      active: w.key === this.currentKey,
+    })));
+  }
+
+  // покупка оружия в меню закупки
+  buy(key) {
+    if (!WEAPONS[key] || this.owned[key]) return;
+    this.owned[key] = true;
+    this.state[key].ammo = WEAPONS[key].mag;
+    this.state[key].reserve = WEAPONS[key].reserve;
+    this.selectSlot(WEAPONS[key].slot);
+    this._syncWeaponHud();
+  }
+
+  // потеря купленного оружия (смерть)
+  stripBought() {
+    this.owned.ak = false;
+    this.owned.awp = false;
+    if (!this.owned[this.currentKey]) {
+      this.models[this.currentKey].visible = false;
+      this.currentKey = 'usp';
+      this.models.usp.visible = true;
+      this._setScope(false);
+    }
+    this._syncWeaponHud();
+    this._syncAmmoHud();
+  }
+
+  // сброс арсенала к пистолетному раунду (новый матч / смена сторон)
+  resetLoadout() {
+    this.stripBought();
+    this.refill();
+  }
+
+  // пополнение патронов в начале раунда
+  roundRefill() {
+    this.refill();
   }
 
   startReload() {
@@ -239,9 +286,9 @@ export class WeaponSystem {
     const eye = this.player.eyePos(new THREE.Vector3());
     const tWall = raycastWorld(eye, dir, 300, this.colliders);
 
-    // проверка попадания по ботам
+    // проверка попадания по ботам вражеской команды (свои не под огнём)
     let hitBot = null, hitT = tWall, hitHead = false;
-    for (const b of this.bots.bots) {
+    for (const b of this.bots.enemiesOfPlayer()) {
       if (!b.alive) continue;
       const bodyMin = new THREE.Vector3(b.pos.x - 0.35, b.pos.y - 0.9, b.pos.z - 0.35);
       const bodyMax = new THREE.Vector3(b.pos.x + 0.35, b.pos.y + 0.6, b.pos.z + 0.35);
@@ -267,8 +314,8 @@ export class WeaponSystem {
       this.effects.blood(hitPoint);
       this.audio.hit(hitHead);
       this.hud.hitmarker(hitHead);
-      const died = hitBot.takeDamage(dmg, hitHead);
-      if (died) this.onKill(hitBot, w.name, hitHead);
+      const died = hitBot.takeDamage(dmg, hitHead, this.player);
+      if (died) this.onKill(hitBot, w, hitHead);
     } else {
       this.effects.impact(hitPoint);
     }
@@ -294,7 +341,7 @@ export class WeaponSystem {
     const eye = this.player.eyePos(new THREE.Vector3());
     const fwd = new THREE.Vector3();
     this.camera.getWorldDirection(fwd);
-    for (const b of this.bots.bots) {
+    for (const b of this.bots.enemiesOfPlayer()) {
       if (!b.alive) continue;
       const to = new THREE.Vector3(b.pos.x - eye.x, 0, b.pos.z - eye.z);
       const dist = to.length();
@@ -306,8 +353,8 @@ export class WeaponSystem {
       this.effects.blood(hitP);
       this.audio.hit(false);
       this.hud.hitmarker(false);
-      const died = b.takeDamage(w.damage, false);
-      if (died) this.onKill(b, w.name, false);
+      const died = b.takeDamage(w.damage, false, this.player);
+      if (died) this.onKill(b, w, false);
       break;
     }
   }

@@ -3,7 +3,9 @@ import { buildMap } from './map.js';
 import { Player } from './player.js';
 import { WeaponSystem } from './weapons.js';
 import { BotManager } from './bots.js';
+import { GameState } from './gamestate.js';
 import { HUD } from './hud.js';
+import { Radar } from './radar.js';
 import { AudioSys } from './audio.js';
 import { Effects } from './effects.js';
 import { damp } from './utils.js';
@@ -30,61 +32,48 @@ window.addEventListener('resize', () => {
 const audio = new AudioSys();
 const hud = new HUD();
 const effects = new Effects(scene);
-const { colliders, waypoints, playerSpawn, botSpawns } = buildMap(scene);
+const { colliders, waypoints, sites, spawns } = buildMap(scene);
 const player = new Player(camera, colliders);
-player.spawn(playerSpawn);
+player.spawn(spawns.T.player);
 
 const state = {
-  started: false,
+  started: false,       // матч запущен
   menuOpen: true,
   difficulty: 'normal',
   sens: 1,
-  kills: 0,
-  deaths: 0,
-  respawnT: 0,
   scoreboardOpen: false,
 };
 
 const bots = new BotManager({
-  scene, colliders, waypoints, spawns: botSpawns, player, effects, audio,
-  onPlayerHit(bot, dmg) {
-    if (!player.alive) return;
-    const died = player.damage(dmg);
-    hud.setHP(player.hp);
-    hud.damageFlash();
-    audio.hurt();
-    if (died) {
-      bot.kills++;
-      state.deaths++;
-      state.respawnT = 3;
-      hud.setScore(state.kills, state.deaths);
-      hud.killfeed(`<b>${bot.name}</b> убил вас`);
-      hud.death(true, `${bot.name} · возрождение через 3 c`);
-      bots.onPlayerDeath();
-    }
-  },
+  scene, colliders, waypoints, spawns, sites, player, effects, audio,
 });
 bots.setDifficulty(state.difficulty);
-let appliedDifficulty = state.difficulty;
 
 const weapons = new WeaponSystem({
   camera, scene, player, bots, colliders, effects, audio, hud,
-  onKill(bot, weaponName, headshot) {
-    state.kills++;
-    hud.setScore(state.kills, state.deaths);
-    hud.killfeed(`Вы <b>убили ${bot.name}</b> (${weaponName}${headshot ? ', в голову' : ''})`);
+  onKill(bot, weapon, headshot) {
+    game.onPlayerKill(bot, weapon, headshot);
   },
   onLoudShot() {
-    bots.alertShot(player.pos);
+    bots.alertShot(player.pos, player.team);
   },
 });
 
+const game = new GameState({
+  player, bots, weapons, hud, audio, effects, scene, sites, spawns,
+});
+bots.setGame(game);
+
+const radar = new Radar(document.getElementById('radar'), colliders, sites);
+
 // --- ввод ---
 const input = { keys: new Set(), mouse0: false, click0: false, click2: false };
+// пустой ввод — подставляется, пока движение заблокировано (подготовка раунда)
+const NO_INPUT = { keys: new Set(), mouse0: false, click0: false, click2: false };
 const KEYMAP = {
   KeyW: 'fwd', KeyS: 'back', KeyA: 'left', KeyD: 'right',
   Space: 'jump', ControlLeft: 'crouch', ControlRight: 'crouch', KeyC: 'crouch',
-  ShiftLeft: 'walk', ShiftRight: 'walk',
+  ShiftLeft: 'walk', ShiftRight: 'walk', KeyE: 'use',
 };
 
 document.addEventListener('keydown', (e) => {
@@ -92,9 +81,12 @@ document.addEventListener('keydown', (e) => {
   if (KEYMAP[e.code]) { input.keys.add(KEYMAP[e.code]); e.preventDefault(); }
   if (e.code.startsWith('Digit')) {
     const n = +e.code.slice(5);
-    if (n >= 1 && n <= 4) weapons.selectSlot(n);
+    // при открытом меню закупки цифры покупают, иначе — переключают оружие
+    if (game.buyOpen) game.buyKey(n);
+    else if (n >= 1 && n <= 4) weapons.selectSlot(n);
   }
   if (e.code === 'KeyR') weapons.startReload();
+  if (e.code === 'KeyB') game.toggleBuy();
   if (e.code === 'Tab') { state.scoreboardOpen = true; e.preventDefault(); }
 });
 document.addEventListener('keyup', (e) => {
@@ -116,7 +108,7 @@ document.addEventListener('mousemove', (e) => {
   player.look(e.movementX, e.movementY, sens);
 });
 
-// --- меню ---
+// --- главное меню ---
 const menuEl = document.getElementById('menu');
 const sensEl = document.getElementById('sens');
 const sensVal = document.getElementById('sens-val');
@@ -124,6 +116,7 @@ sensEl.addEventListener('input', () => {
   state.sens = +sensEl.value;
   sensVal.textContent = state.sens.toFixed(1);
 });
+let appliedDifficulty = null;
 document.querySelectorAll('.diff-btn').forEach((b) => {
   b.addEventListener('click', () => {
     document.querySelectorAll('.diff-btn').forEach((x) => x.classList.remove('active'));
@@ -134,17 +127,21 @@ document.querySelectorAll('.diff-btn').forEach((b) => {
 
 document.getElementById('play').addEventListener('click', () => {
   audio.resume();
-  if (appliedDifficulty !== state.difficulty) {
+  // новый матч, если ещё не начат или сменили сложность
+  if (!state.started || appliedDifficulty !== state.difficulty) {
     appliedDifficulty = state.difficulty;
-    bots.setDifficulty(state.difficulty);
-    state.kills = 0;
-    state.deaths = 0;
-    hud.setScore(0, 0);
-    if (!player.alive) { state.respawnT = 0; }
-    respawnPlayer();
+    hud.gameOver(false);
+    game.startMatch(state.difficulty);
+    state.started = true;
   }
-  state.started = true;
   closeMenu();
+});
+
+// возврат в меню с экрана конца матча
+document.getElementById('to-menu').addEventListener('click', () => {
+  hud.gameOver(false);
+  state.started = false; // следующее «Играть» начнёт новый матч
+  openMenu();
 });
 
 function closeMenu() {
@@ -161,26 +158,18 @@ function openMenu() {
 }
 
 document.addEventListener('pointerlockchange', () => {
-  if (!document.pointerLockElement && state.started && !state.menuOpen) openMenu();
+  if (!document.pointerLockElement && state.started && !state.menuOpen
+      && game.phase !== 'gameover') openMenu();
 });
 renderer.domElement.addEventListener('click', () => {
-  if (!state.menuOpen && !document.pointerLockElement) {
+  if (!state.menuOpen && !document.pointerLockElement && game.phase !== 'gameover') {
     renderer.domElement.requestPointerLock?.();
   }
 });
 
-// --- зум AWP ---
-let targetFov = 75;
-
-function respawnPlayer() {
-  player.spawn(playerSpawn);
-  weapons.refill();
-  hud.setHP(player.hp);
-  hud.death(false);
-}
-
 // --- игровой цикл ---
 const clock = new THREE.Clock();
+let targetFov = 75;
 
 function tick() {
   requestAnimationFrame(tick);
@@ -188,36 +177,36 @@ function tick() {
 
   if (state.started && !state.menuOpen) {
     if (player.alive) {
+      // во время подготовки движение и стрельба заблокированы, обзор — нет
+      const activeInput = game.movementLocked ? NO_INPUT : input;
       const recoil = { pitch: weapons.recoil.pitch, yaw: weapons.recoil.yaw };
-      player.update(dt, input, weapons.weapon.moveMult, recoil, audio);
-      weapons.update(dt, input);
-    } else {
-      state.respawnT -= dt;
-      if (state.respawnT <= 0) respawnPlayer();
+      player.update(dt, activeInput, weapons.weapon.moveMult, recoil, audio);
+      if (game.combatAllowed) weapons.update(dt, input);
+      else { input.click0 = false; input.click2 = false; } // клики не копятся в паузах
     }
     bots.update(dt);
+    game.update(dt, input);
     effects.update(dt);
 
-    // зум
+    // зум AWP
     targetFov = weapons.scoped ? 20 : 75;
     if (Math.abs(camera.fov - targetFov) > 0.1) {
       camera.fov = damp(camera.fov, targetFov, 14, dt);
       camera.updateProjectionMatrix();
     }
 
+    radar.update(dt, { player, bots, game, colliders });
     hud.setSpeed(player.horizSpeed);
-    hud.scoreboard(state.scoreboardOpen, state.scoreboardOpen ? [
-      { name: 'Вы', kills: state.kills, deaths: state.deaths, me: true },
-      ...bots.bots.map((b) => ({ name: b.name, kills: b.kills, deaths: b.deaths })),
-    ] : null);
+    hud.scoreboard(state.scoreboardOpen, state.scoreboardOpen ? game.scoreboardData() : null);
   }
 
   renderer.render(scene, camera);
 }
 
 hud.setHP(player.hp);
-hud.setScore(0, 0);
+hud.setArmor(0);
+hud.setMoney(800);
 tick();
 
 // хук для отладки/тестов
-window.__game = { state, player, bots, weapons };
+window.__game = { state, game, player, bots, weapons };

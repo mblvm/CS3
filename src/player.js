@@ -22,6 +22,8 @@ export class Player {
     this.yaw = 0;
     this.pitch = 0;
     this.hp = 100;
+    this.armor = 0;   // кевлар 0..100, гасит часть урона
+    this.team = 'T';  // сторона игрока в текущей половине матча
     this.alive = true;
     this.onGround = false;
     this.crouching = false;
@@ -160,6 +162,12 @@ export class Player {
 
   damage(dmg) {
     if (!this.alive) return false;
+    // броня поглощает половину урона и изнашивается
+    if (this.armor > 0) {
+      const absorbed = Math.min(this.armor * 2, dmg * 0.5);
+      this.armor = Math.max(0, Math.round(this.armor - dmg * 0.33));
+      dmg -= absorbed;
+    }
     this.hp -= dmg;
     if (this.hp <= 0) {
       this.hp = 0;
