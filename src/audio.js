@@ -125,4 +125,45 @@ export class AudioSys {
     if (!this.ctx) return;
     this._noiseShot({ dur: 0.05, cutoff: 500 + Math.random() * 200, vol, bodyFreq: 0 });
   }
+
+  // писк таймера бомбы
+  beep() {
+    if (!this.ctx) return;
+    this._click(1150, 0, 0.1, 0.06);
+  }
+
+  // бомба установлена: два восходящих сигнала
+  planted() {
+    if (!this.ctx) return;
+    this._click(660, 0, 0.16, 0.12);
+    this._click(880, 0.16, 0.16, 0.16);
+  }
+
+  // бомба обезврежена: щелчок + нисходящий сигнал
+  defused() {
+    if (!this.ctx) return;
+    this._click(1400, 0, 0.12, 0.04);
+    this._click(700, 0.12, 0.14, 0.2);
+  }
+
+  // взрыв бомбы: длинный низкий грохот
+  explosion() {
+    if (!this.ctx) return;
+    this._noiseShot({ dur: 1.4, cutoff: 900, vol: 0.9, bodyFreq: 48 });
+    this._noiseShot({ dur: 0.5, cutoff: 3000, vol: 0.5, bodyFreq: 90 });
+  }
+
+  // джингл конца раунда: победа — вверх, поражение — вниз
+  sting(win) {
+    if (!this.ctx) return;
+    const notes = win ? [523, 659, 784] : [392, 330, 262];
+    notes.forEach((f, i) => this._click(f, i * 0.14, 0.12, 0.13));
+  }
+
+  // звон монет при покупке
+  cash() {
+    if (!this.ctx) return;
+    this._click(1800, 0, 0.1, 0.03);
+    this._click(2400, 0.05, 0.1, 0.04);
+  }
 }

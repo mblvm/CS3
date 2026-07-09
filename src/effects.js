@@ -48,6 +48,34 @@ export class Effects {
     this.flash.intensity = 6;
   }
 
+  // взрыв бомбы: вспышка, огненный шар и разлетающиеся частицы
+  explosion(p) {
+    this.flash.position.set(p.x, p.y + 1.5, p.z);
+    this.flash.intensity = 60;
+    const ball = new THREE.Mesh(
+      this._impactGeo,
+      new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0.95 }),
+    );
+    ball.position.set(p.x, p.y + 0.6, p.z);
+    this.scene.add(ball);
+    this.items.push({ obj: ball, life: 0.6, max: 0.6, kind: 'puff', grow: 90 });
+    for (let i = 0; i < 26; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: Math.random() < 0.5 ? 0xff8020 : 0x555046,
+        transparent: true, opacity: 0.95,
+      });
+      const m = new THREE.Mesh(this._impactGeo, mat);
+      m.position.set(p.x, p.y + 0.4, p.z);
+      const vel = new THREE.Vector3(
+        (Math.random() - 0.5) * 22,
+        Math.random() * 14 + 3,
+        (Math.random() - 0.5) * 22,
+      );
+      this.scene.add(m);
+      this.items.push({ obj: m, life: 0.9, max: 0.9, kind: 'debris', vel });
+    }
+  }
+
   update(dt) {
     this.flash.intensity *= Math.pow(0.00001, dt);
     if (this.flash.intensity < 0.05) this.flash.intensity = 0;
@@ -57,8 +85,12 @@ export class Effects {
       const k = Math.max(it.life / it.max, 0);
       if (it.obj.material) it.obj.material.opacity = k;
       if (it.kind === 'puff') {
-        const s = 1 + (1 - k) * 3;
+        const s = 1 + (1 - k) * (it.grow || 3);
         it.obj.scale.setScalar(s);
+      } else if (it.kind === 'debris') {
+        it.vel.y -= 25 * dt;
+        it.obj.position.addScaledVector(it.vel, dt);
+        if (it.obj.position.y < 0.05) { it.obj.position.y = 0.05; it.vel.y = 0; }
       }
       if (it.life <= 0) {
         this.scene.remove(it.obj);

@@ -22,9 +22,12 @@ export function buildMap(scene) {
     m.castShadow = true;
     m.receiveShadow = true;
     scene.add(m);
+    // центр и радиус описанной сферы — для быстрой отбраковки в raycastWorld
     colliders.push({
       min: new THREE.Vector3(cx - w / 2, y0, cz - d / 2),
       max: new THREE.Vector3(cx + w / 2, y0 + h, cz + d / 2),
+      center: new THREE.Vector3(cx, y0 + h / 2, cz),
+      radius: Math.hypot(w, h, d) / 2,
     });
     return m;
   }
@@ -146,15 +149,24 @@ export function buildMap(scene) {
     /*23 B левый   */ wp(-22, -34, [21, 13, 16]),
   ];
 
-  const playerSpawn = { pos: new THREE.Vector3(0, 0.91, 41), yaw: 0 };
-  const botSpawns = [
-    new THREE.Vector3(0, 0.91, -41),
-    new THREE.Vector3(9, 0.91, -40),
-    new THREE.Vector3(-9, 0.91, -40),
-    new THREE.Vector3(16, 0.91, -41),
-    new THREE.Vector3(-16, 0.91, -41),
-    new THREE.Vector3(22, 0.91, -40),
-  ];
+  // --- Зоны закладки бомбы (прямоугольники в плоскости XZ) ---
+  const sites = {
+    A: { cx: 34, cz: -31, hw: 9, hd: 8 },
+    B: { cx: -34, cz: -31, hw: 9, hd: 8 },
+  };
 
-  return { colliders, waypoints, playerSpawn, botSpawns };
+  // --- Точки появления команд: T — юг, CT — север ---
+  const v = (x, z) => new THREE.Vector3(x, 0.91, z);
+  const spawns = {
+    T: {
+      player: { pos: v(0, 41), yaw: 0 }, // лицом на север
+      bots: [v(5, 41), v(-5, 41), v(10, 40), v(-10, 40), v(16, 41), v(-16, 41)],
+    },
+    CT: {
+      player: { pos: v(0, -41), yaw: Math.PI }, // лицом на юг
+      bots: [v(5, -41), v(-5, -41), v(10, -40), v(-10, -40), v(16, -41), v(-16, -41)],
+    },
+  };
+
+  return { colliders, waypoints, sites, spawns };
 }
