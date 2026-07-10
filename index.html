@@ -150,7 +150,8 @@
       text-shadow: 0 3px 12px #000; }
     #gameover-title.win { color: #6cff8a; }
     #gameover-title.lose { color: #ff6a5a; }
-    #gameover-score { margin: 14px 0 30px; font-size: 26px; color: #eee; }
+    #gameover-score { margin: 14px 0 10px; font-size: 26px; color: #eee; }
+    #gameover-sub { margin-bottom: 26px; font-size: 15px; color: #ffd780; }
     #to-menu { cursor: pointer; padding: 12px 44px; font-size: 17px; font-weight: 700;
       background: #ffb340; color: #1a1408; border: none; border-radius: 4px; }
     #to-menu:hover { background: #ffc668; }
@@ -172,8 +173,67 @@
       font-weight: 700; letter-spacing: 2px; background: #ffb340; color: #1a1408;
       border: none; border-radius: 4px; }
     #play:hover { background: #ffc668; }
+    #open-cases { cursor: pointer; margin-top: 22px; margin-left: 12px; padding: 14px 26px;
+      font-size: 16px; font-weight: 700; background: rgba(0,0,0,.35); color: #ffd780;
+      border: 1px solid #6b5a35; border-radius: 4px; position: relative; }
+    #open-cases:hover { border-color: #ffb340; }
+    #case-badge { position: absolute; top: -9px; right: -9px; min-width: 22px; height: 22px;
+      background: #eb4b4b; color: #fff; border-radius: 11px; font-size: 13px;
+      line-height: 22px; padding: 0 4px; }
     #menu .help { margin-top: 26px; font-size: 12.5px; line-height: 1.9; opacity: .65; text-align: left; }
     #menu .help b { color: #ffb340; }
+
+    /* --- панель кейсов --- */
+    #cases-panel { position: fixed; inset: 0; z-index: 12; display: none;
+      align-items: center; justify-content: center; background: rgba(8,8,12,.7); }
+    .cp-inner { width: min(820px, 94vw); max-height: 90vh; overflow-y: auto;
+      background: #17151022; backdrop-filter: blur(4px);
+      background: rgba(20,18,12,.96); border: 1px solid #4a3f28; border-radius: 8px;
+      padding: 20px 24px; color: #e8e4d8; }
+    .cp-head { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+    .cp-head h2 { color: #ffb340; letter-spacing: 2px; }
+    #cases-count { color: #ffd780; font-size: 15px; }
+    #cases-close { margin-left: auto; cursor: pointer; background: none; border: none;
+      color: #cfc7b0; font-size: 22px; }
+    #cases-close:hover { color: #fff; }
+    .cp-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+    #btn-open-case { cursor: pointer; padding: 10px 30px; font-size: 16px; font-weight: 700;
+      background: #ffb340; color: #1a1408; border: none; border-radius: 4px; }
+    #btn-open-case:hover:not(:disabled) { background: #ffc668; }
+    #btn-open-case:disabled { opacity: .45; cursor: default; }
+    .cp-hint { font-size: 12.5px; opacity: .6; }
+
+    #roulette { position: relative; display: none; height: 132px; overflow: hidden;
+      border: 1px solid #4a3f28; border-radius: 6px; background: rgba(0,0,0,.45);
+      margin-bottom: 12px; }
+    #roulette-strip { display: flex; position: absolute; left: 0; top: 8px; will-change: transform; }
+    #roulette-marker { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px;
+      background: #ffb340; box-shadow: 0 0 8px #ffb340; }
+
+    .cs-card { flex: 0 0 116px; width: 116px; margin: 0 4px; background: rgba(255,255,255,.05);
+      border-radius: 5px; border-bottom: 3px solid var(--rc, #4b69ff); overflow: hidden;
+      font-size: 12px; }
+    .cs-img { height: 62px; background-size: cover; background-position: center; }
+    .cs-weapon { padding: 4px 8px 0; opacity: .65; font-size: 11px; }
+    .cs-name { padding: 0 8px 6px; font-weight: 600; color: #fff;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cs-note { padding: 0 8px 6px; font-size: 10.5px; color: var(--rc); }
+    .cs-card.clickable { cursor: pointer; }
+    .cs-card.clickable:hover { background: rgba(255,255,255,.12); }
+    .cs-card.equipped { cursor: pointer; outline: 2px solid var(--rc);
+      background: rgba(255,255,255,.1); }
+
+    #case-result { text-align: center; margin-bottom: 12px; }
+    .cs-result { display: inline-block; padding: 10px 34px; border-radius: 6px;
+      border: 1px solid var(--rc); background: rgba(0,0,0,.4);
+      box-shadow: 0 0 18px color-mix(in srgb, var(--rc) 55%, transparent); }
+    .cs-result-rarity { font-size: 12.5px; color: var(--rc); letter-spacing: 1px; }
+    .cs-result-name { font-size: 20px; font-weight: 700; color: #fff; margin-top: 2px; }
+
+    .cp-inner h3 { margin: 8px 0; color: #cfc7b0; font-size: 15px; }
+    #inventory { display: flex; flex-wrap: wrap; gap: 8px; }
+    #inventory .cs-card { margin: 0; }
+    .cs-empty { font-size: 13.5px; opacity: .6; padding: 10px 0 16px; }
   </style>
 </head>
 <body>
@@ -220,14 +280,36 @@
     <div id="gameover">
       <div id="gameover-title"></div>
       <div id="gameover-score"></div>
+      <div id="gameover-sub"></div>
       <button id="to-menu">В главное меню</button>
+    </div>
+  </div>
+
+  <div id="cases-panel">
+    <div class="cp-inner">
+      <div class="cp-head">
+        <h2>🎁 КЕЙСЫ</h2>
+        <span id="cases-count">Кейсов: 0</span>
+        <button id="cases-close" title="Закрыть">✕</button>
+      </div>
+      <div class="cp-row">
+        <button id="btn-open-case">Открыть кейс</button>
+        <span class="cp-hint">Кейсы выдаются за победы в раундах и за завершение матча</span>
+      </div>
+      <div id="roulette">
+        <div id="roulette-strip"></div>
+        <div id="roulette-marker"></div>
+      </div>
+      <div id="case-result"></div>
+      <h3>Инвентарь — нажмите на скин, чтобы экипировать</h3>
+      <div id="inventory"></div>
     </div>
   </div>
 
   <div id="menu">
     <div class="panel">
       <h1>CS3 · BROWSER STRIKE</h1>
-      <p class="sub">Раунды с закладкой бомбы · экономика · до 13 побед · смена сторон после 12 раундов</p>
+      <p class="sub">Раунды с закладкой бомбы · экономика · до 7 побед · смена сторон после 6 раундов · кейсы со скинами</p>
       <div class="row">
         Сложность ботов:
         <button class="diff-btn" data-diff="easy">Лёгкая</button>
@@ -239,6 +321,7 @@
         <span id="sens-val">1.0</span>
       </div>
       <button id="play">▶ ИГРАТЬ</button>
+      <button id="open-cases">🎁 Кейсы <span id="case-badge">0</span></button>
       <div class="help">
         <b>WASD</b> — движение · <b>Мышь</b> — прицел · <b>ЛКМ</b> — огонь · <b>ПКМ</b> — прицел AWP<br/>
         <b>Пробел</b> — прыжок (держите для распрыжки) · <b>Ctrl / C</b> — присед · <b>Shift</b> — тихий шаг<br/>

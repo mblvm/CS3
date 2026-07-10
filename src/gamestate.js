@@ -3,8 +3,8 @@ import { clamp, randInt } from './utils.js';
 
 // Правила матча
 export const RULES = {
-  winScore: 13,    // раундов до победы в матче
-  halfRounds: 12,  // после стольких раундов — смена сторон
+  winScore: 7,     // раундов до победы в матче
+  halfRounds: 6,   // после стольких раундов — смена сторон
   freezeTime: 3,   // подготовка перед раундом, сек
   buyTime: 10,     // окно закупки после подготовки, сек
   roundTime: 115,  // длительность раунда, сек
@@ -41,7 +41,7 @@ const TEAM_LABEL = { T: 'Террористы', CT: 'Спецназ' };
 
 // Оркестратор матча: фазы раунда, бомба, экономика, счёт, победа.
 export class GameState {
-  constructor({ player, bots, weapons, hud, audio, effects, scene, sites, spawns }) {
+  constructor({ player, bots, weapons, hud, audio, effects, scene, sites, spawns, cases }) {
     this.player = player;
     this.bots = bots;
     this.weapons = weapons;
@@ -51,6 +51,7 @@ export class GameState {
     this.scene = scene;
     this.sites = sites;
     this.spawns = spawns;
+    this.cases = cases;
     this.rules = RULES;
 
     this.phase = 'idle'; // idle | freeze | live | planted | end | gameover
@@ -302,6 +303,12 @@ export class GameState {
     const myWin = winner === this.playerSide;
     if (myWin) this.score.my++; else this.score.enemy++;
 
+    // кейс за победу в раунде
+    if (myWin && this.cases) {
+      this.cases.award(1);
+      this.hud.killfeed('Вы получили <b>кейс</b> за победу в раунде');
+    }
+
     // экономика игрока
     let inc = 0;
     if (myWin) {
@@ -341,7 +348,13 @@ export class GameState {
     if (this.score.my >= RULES.winScore || this.score.enemy >= RULES.winScore) {
       this.phase = 'gameover';
       const won = this.score.my > this.score.enemy;
-      this.hud.gameOver(true, won, `${this.score.my} : ${this.score.enemy}`);
+      let sub = '';
+      if (this.cases) {
+        const bonus = won ? 2 : 1;
+        this.cases.award(bonus);
+        sub = `+${bonus} ${bonus === 1 ? 'кейс' : 'кейса'} за матч — откройте в меню (🎁 Кейсы)`;
+      }
+      this.hud.gameOver(true, won, `${this.score.my} : ${this.score.enemy}`, sub);
       this.audio.sting(won);
       document.exitPointerLock?.(); // курсор для кнопки «В главное меню»
       return;

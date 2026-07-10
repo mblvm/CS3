@@ -166,4 +166,17 @@ export class AudioSys {
     this._click(1800, 0, 0.1, 0.03);
     this._click(2400, 0.05, 0.1, 0.04);
   }
+
+  // тик рулетки кейса
+  caseTick() {
+    if (!this.ctx) return;
+    this._click(1900 + Math.random() * 400, 0, 0.05, 0.02);
+  }
+
+  // выпадение предмета из кейса; rare — фанфары подлиннее
+  caseReveal(rare) {
+    if (!this.ctx) return;
+    const notes = rare ? [523, 659, 784, 1047, 1319] : [523, 659, 784];
+    notes.forEach((f, i) => this._click(f, i * 0.11, 0.13, 0.14));
+  }
 }

@@ -8,6 +8,8 @@ import { HUD } from './hud.js';
 import { Radar } from './radar.js';
 import { AudioSys } from './audio.js';
 import { Effects } from './effects.js';
+import { CaseSystem } from './cases.js';
+import { CasesUI } from './casesui.js';
 import { damp } from './utils.js';
 
 // --- рендер ---
@@ -16,6 +18,9 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -59,8 +64,16 @@ const weapons = new WeaponSystem({
   },
 });
 
+// кейсы и скины: инвентарь в localStorage, скины красят вьюмодели
+const cases = new CaseSystem();
+weapons.applySkins(cases);
+const casesUI = new CasesUI({
+  cases, audio,
+  onChange: () => weapons.applySkins(cases),
+});
+
 const game = new GameState({
-  player, bots, weapons, hud, audio, effects, scene, sites, spawns,
+  player, bots, weapons, hud, audio, effects, scene, sites, spawns, cases,
 });
 bots.setGame(game);
 
@@ -155,6 +168,7 @@ function openMenu() {
   menuEl.style.display = '';
   input.keys.clear();
   input.mouse0 = false;
+  casesUI.refresh(); // обновить счётчик кейсов, заработанных за матч
 }
 
 document.addEventListener('pointerlockchange', () => {
@@ -209,4 +223,4 @@ hud.setMoney(800);
 tick();
 
 // хук для отладки/тестов
-window.__game = { state, game, player, bots, weapons };
+window.__game = { state, game, player, bots, weapons, cases };

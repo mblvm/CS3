@@ -8,15 +8,28 @@ export function buildMap(scene) {
   const colliders = [];
   const T = makeTextures();
 
-  function matFromTex(t, rx, ry) {
+  function matFromTex(t, rx, ry, opts = {}) {
     const tt = t.clone();
     tt.needsUpdate = true;
     tt.repeat.set(Math.max(1, Math.round(rx)), Math.max(1, Math.round(ry)));
-    return new THREE.MeshLambertMaterial({ map: tt });
+    // та же текстура как bump — дешёвый рельеф из яркости
+    return new THREE.MeshStandardMaterial({
+      map: tt,
+      bumpMap: tt,
+      bumpScale: opts.bump ?? 0.05,
+      roughness: opts.roughness ?? 0.95,
+      metalness: opts.metalness ?? 0.02,
+    });
   }
 
+  // разные настройки поверхности по типу текстуры
+  const MAT_OPTS = new Map([
+    [T.metal, { bump: 0.02, roughness: 0.45, metalness: 0.55 }],
+    [T.crate, { bump: 0.06, roughness: 0.85, metalness: 0.02 }],
+  ]);
+
   function box(cx, cz, w, h, d, tex, y0 = 0, texScale = 3.5) {
-    const mat = matFromTex(tex, (w + d) / 2 / texScale, h / texScale);
+    const mat = matFromTex(tex, (w + d) / 2 / texScale, h / texScale, MAT_OPTS.get(tex));
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     m.position.set(cx, y0 + h / 2, cz);
     m.castShadow = true;
@@ -34,11 +47,19 @@ export function buildMap(scene) {
 
   // --- Небо, свет, туман ---
   scene.background = new THREE.Color(0x9ec4e0);
-  scene.fog = new THREE.Fog(0xcbbfa0, 70, 230);
+  scene.fog = new THREE.Fog(0xd6c7a2, 80, 260);
 
-  const hemi = new THREE.HemisphereLight(0xd8ecff, 0x8a7a55, 0.9);
+  // купол неба с градиентом, солнцем и облаками
+  const skyDome = new THREE.Mesh(
+    new THREE.SphereGeometry(330, 32, 16),
+    new THREE.MeshBasicMaterial({ map: T.sky, side: THREE.BackSide, fog: false, depthWrite: false }),
+  );
+  skyDome.rotation.y = Math.PI * 0.55; // солнце на текстуре — над источником света
+  scene.add(skyDome);
+
+  const hemi = new THREE.HemisphereLight(0xcfe4ff, 0x8a7a55, 0.75);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff2d4, 1.6);
+  const sun = new THREE.DirectionalLight(0xffeecb, 2.2);
   sun.position.set(45, 70, 25);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -49,9 +70,13 @@ export function buildMap(scene) {
   sun.shadow.camera.far = 200;
   sun.shadow.bias = -0.0005;
   scene.add(sun);
+  // мягкая подсветка с противоположной стороны, чтобы тени не были чёрными
+  const bounce = new THREE.DirectionalLight(0xbfd4e8, 0.35);
+  bounce.position.set(-30, 40, -20);
+  scene.add(bounce);
 
   // --- Пол ---
-  const floorMat = matFromTex(T.floor, 28, 24);
+  const floorMat = matFromTex(T.floor, 28, 24, { bump: 0.04 });
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(114, 94), floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
