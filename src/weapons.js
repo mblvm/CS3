@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clamp, gauss, damp, raycastWorld, rayAABB, raySphere } from './utils.js';
+import { skinTexture } from './cases.js';
 
 const D2R = Math.PI / 180;
 
@@ -82,15 +83,41 @@ export class WeaponSystem {
   get ammoState() { return this.state[this.currentKey]; }
 
   _buildViewModels() {
-    const dark = new THREE.MeshLambertMaterial({ color: 0x2b2d31 });
-    const steel = new THREE.MeshLambertMaterial({ color: 0x9aa2ab });
-    const wood = new THREE.MeshLambertMaterial({ color: 0x6b4a26 });
-    const green = new THREE.MeshLambertMaterial({ color: 0x3d4b3a });
+    // материалы по частям: body — красится скином, accent — рукояти/приклады,
+    // metal — стволы и механика (скином не красятся)
+    const std = (color, roughness, metalness) =>
+      new THREE.MeshStandardMaterial({ color, roughness, metalness });
+    this._mats = {
+      knife: { body: std(0xc8d0d8, 0.25, 0.9), accent: std(0x26282c, 0.7, 0.2), metal: std(0x5a5f66, 0.35, 0.8) },
+      usp:   { body: std(0x2e3238, 0.35, 0.7), accent: std(0x222428, 0.6, 0.3), metal: std(0x6f767e, 0.35, 0.85) },
+      ak:    { body: std(0x33363b, 0.4, 0.6),  accent: std(0x6e4a26, 0.6, 0.05), metal: std(0x55595f, 0.4, 0.8) },
+      awp:   { body: std(0x4a5942, 0.6, 0.15), accent: std(0x2c2f33, 0.6, 0.3), metal: std(0x3d4147, 0.4, 0.75) },
+    };
+    // запомнить заводской вид для снятия скина
+    this._defaults = {};
+    for (const k in this._mats) {
+      this._defaults[k] = {
+        color: this._mats[k].body.color.clone(),
+        roughness: this._mats[k].body.roughness,
+        metalness: this._mats[k].body.metalness,
+        accent: this._mats[k].accent.color.clone(),
+      };
+    }
 
-    const bx = (w, h, d, mat, x, y, z, rx = 0) => {
+    const bx = (grp, mat, w, h, d, x, y, z, rx = 0, rz = 0) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
       m.position.set(x, y, z);
       m.rotation.x = rx;
+      m.rotation.z = rz;
+      grp.add(m);
+      return m;
+    };
+    // цилиндр вдоль оси Z (стволы, глушители, прицелы)
+    const cz = (grp, mat, r, len, x, y, z, seg = 12) => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, seg), mat);
+      m.rotation.x = Math.PI / 2;
+      m.position.set(x, y, z);
+      grp.add(m);
       return m;
     };
 
@@ -100,38 +127,114 @@ export class WeaponSystem {
 
     this.models = {};
 
-    const knife = new THREE.Group();
-    knife.add(bx(0.035, 0.045, 0.14, dark, 0, 0, 0.07));
-    knife.add(bx(0.012, 0.05, 0.26, steel, 0, 0.01, -0.13));
-    this.models.knife = knife;
+    // --- Нож: клинок (красится скином), гарда, рукоять с кольцами ---
+    {
+      const M = this._mats.knife;
+      const g = new THREE.Group();
+      bx(g, M.body, 0.014, 0.048, 0.28, 0, 0.012, -0.15);         // клинок
+      bx(g, M.body, 0.013, 0.032, 0.07, 0, 0.02, -0.315, 0.28);   // скос к острию
+      bx(g, M.metal, 0.006, 0.014, 0.26, 0, 0.038, -0.14);        // обух
+      bx(g, M.metal, 0.022, 0.075, 0.018, 0, 0, -0.005);          // гарда
+      bx(g, M.accent, 0.03, 0.05, 0.15, 0, -0.004, 0.085);        // рукоять
+      for (const zz of [0.035, 0.085, 0.135])
+        bx(g, M.metal, 0.033, 0.053, 0.007, 0, -0.004, zz);       // кольца рукояти
+      bx(g, M.metal, 0.033, 0.054, 0.02, 0, -0.004, 0.168);       // навершие
+      g.rotation.y = 0.35;
+      this.models.knife = g;
+    }
 
-    const usp = new THREE.Group();
-    usp.add(bx(0.05, 0.11, 0.19, dark, 0, -0.02, 0));
-    usp.add(bx(0.035, 0.045, 0.24, steel, 0, 0.045, -0.16));
-    this.models.usp = usp;
+    // --- USP-S: затвор, рамка, рукоять, глушитель, прицельные ---
+    {
+      const M = this._mats.usp;
+      const g = new THREE.Group();
+      bx(g, M.body, 0.046, 0.052, 0.22, 0, 0.045, -0.05);          // затвор
+      bx(g, M.metal, 0.048, 0.012, 0.06, 0, 0.045, 0.05);          // насечки затвора
+      bx(g, M.accent, 0.042, 0.05, 0.19, 0, 0.0, -0.045);          // рамка
+      bx(g, M.accent, 0.04, 0.125, 0.058, 0, -0.075, 0.045, 0.16); // рукоять
+      bx(g, M.metal, 0.03, 0.008, 0.055, 0, -0.032, -0.01);        // скоба
+      bx(g, M.metal, 0.008, 0.03, 0.008, 0, -0.02, 0.015);         // курок
+      cz(g, M.metal, 0.021, 0.17, 0, 0.045, -0.245);               // глушитель
+      bx(g, M.metal, 0.022, 0.012, 0.012, 0, 0.078, 0.045);        // целик
+      bx(g, M.metal, 0.007, 0.012, 0.012, 0, 0.078, -0.15);        // мушка
+      this.models.usp = g;
+    }
 
-    const ak = new THREE.Group();
-    ak.add(bx(0.06, 0.1, 0.5, dark, 0, 0, -0.05));
-    ak.add(bx(0.04, 0.04, 0.32, steel, 0, 0.02, -0.42));
-    ak.add(bx(0.05, 0.2, 0.09, dark, 0, -0.13, 0.02, 0.45));
-    ak.add(bx(0.055, 0.09, 0.22, wood, 0, -0.005, 0.31));
-    this.models.ak = ak;
+    // --- AK-47: коробка, ствол, газовая трубка, дерево, магазин ---
+    {
+      const M = this._mats.ak;
+      const g = new THREE.Group();
+      bx(g, M.body, 0.05, 0.072, 0.26, 0, 0, 0.03);                // ствольная коробка
+      bx(g, M.body, 0.044, 0.02, 0.22, 0, 0.046, 0.02);            // крышка
+      cz(g, M.metal, 0.013, 0.34, 0, 0.018, -0.33);                // ствол
+      cz(g, M.metal, 0.011, 0.16, 0, 0.052, -0.22);                // газовая трубка
+      bx(g, M.accent, 0.052, 0.052, 0.17, 0, 0.002, -0.185);       // цевьё
+      bx(g, M.metal, 0.009, 0.05, 0.012, 0, 0.06, -0.47);          // мушка
+      cz(g, M.metal, 0.017, 0.055, 0, 0.018, -0.525, 10);          // дульный тормоз
+      bx(g, M.body, 0.038, 0.13, 0.068, 0, -0.095, 0.02, 0.4);     // магазин (верх)
+      bx(g, M.body, 0.038, 0.1, 0.06, 0, -0.165, 0.075, 0.8);      // магазин (изгиб)
+      bx(g, M.accent, 0.036, 0.09, 0.05, 0, -0.075, 0.14, -0.22);  // рукоять
+      bx(g, M.accent, 0.042, 0.07, 0.2, 0, -0.015, 0.27, 0.08);    // приклад
+      bx(g, M.accent, 0.046, 0.1, 0.045, 0, -0.028, 0.365);        // затыльник
+      this.models.ak = g;
+    }
 
-    const awp = new THREE.Group();
-    awp.add(bx(0.06, 0.09, 0.78, green, 0, 0, -0.1));
-    awp.add(bx(0.035, 0.035, 0.4, dark, 0, 0.015, -0.6));
-    const scopeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.26, 10), dark);
-    scopeMesh.rotation.x = Math.PI / 2;
-    scopeMesh.position.set(0, 0.09, -0.12);
-    awp.add(scopeMesh);
-    awp.add(bx(0.05, 0.11, 0.16, green, 0, -0.01, 0.35));
-    this.models.awp = awp;
+    // --- AWP: ложа, длинный ствол, прицел с линзой, затвор, магазин ---
+    {
+      const M = this._mats.awp;
+      const g = new THREE.Group();
+      bx(g, M.body, 0.05, 0.075, 0.5, 0, 0, -0.03);                // ложа
+      cz(g, M.metal, 0.014, 0.4, 0, 0.02, -0.47);                  // ствол
+      cz(g, M.metal, 0.02, 0.075, 0, 0.02, -0.68, 10);             // дульный тормоз
+      cz(g, M.metal, 0.028, 0.22, 0, 0.098, -0.08);                // труба прицела
+      cz(g, M.metal, 0.034, 0.03, 0, 0.098, -0.2);                 // объектив
+      cz(g, M.metal, 0.034, 0.03, 0, 0.098, 0.04);                 // окуляр
+      const lens = new THREE.Mesh(
+        new THREE.CircleGeometry(0.027, 14),
+        new THREE.MeshBasicMaterial({ color: 0x0a1a2c }),
+      );
+      lens.position.set(0, 0.098, 0.056);
+      g.add(lens);
+      bx(g, M.metal, 0.016, 0.035, 0.03, 0, 0.06, -0.13);          // крепление прицела
+      bx(g, M.metal, 0.016, 0.035, 0.03, 0, 0.06, -0.01);          // крепление прицела
+      const bolt = cz(g, M.metal, 0.008, 0.05, 0.045, 0.028, 0.09, 8);
+      bolt.rotation.set(0, 0, 1.1);                                // рукоять затвора
+      bx(g, M.metal, 0.04, 0.085, 0.09, 0, -0.058, -0.06);         // магазин
+      bx(g, M.accent, 0.036, 0.1, 0.05, 0, -0.08, 0.14, -0.3);     // рукоять
+      bx(g, M.body, 0.046, 0.1, 0.2, 0, -0.015, 0.33);             // приклад
+      bx(g, M.accent, 0.05, 0.028, 0.12, 0, 0.048, 0.31);          // щека приклада
+      this.models.awp = g;
+    }
 
     for (const k in this.models) {
       this.models[k].visible = false;
       this.viewRoot.add(this.models[k]);
     }
     this.models[this.currentKey].visible = true;
+  }
+
+  // применить экипированные скины из системы кейсов ко вьюмоделям
+  applySkins(caseSys) {
+    this._caseSys = caseSys;
+    for (const key of ['knife', 'usp', 'ak', 'awp']) {
+      const mats = this._mats[key];
+      const def = this._defaults[key];
+      const skin = caseSys?.equippedSkin(key) || null;
+      if (skin) {
+        mats.body.map = skinTexture(skin);
+        mats.body.color.set(0xffffff);
+        mats.body.roughness = 0.38;
+        mats.body.metalness = 0.45;
+        mats.accent.color.set(skin.accent);
+      } else {
+        mats.body.map = null;
+        mats.body.color.copy(def.color);
+        mats.body.roughness = def.roughness;
+        mats.body.metalness = def.metalness;
+        mats.accent.color.copy(def.accent);
+      }
+      mats.body.needsUpdate = true;
+    }
+    this._syncWeaponHud();
   }
 
   selectSlot(n) {
@@ -148,11 +251,17 @@ export class WeaponSystem {
     this._syncAmmoHud();
   }
 
+  // имя с учётом экипированного скина: «AK-47 | Азимов»
+  _displayName(key) {
+    const skin = this._caseSys?.equippedSkin(key);
+    return skin ? `${WEAPONS[key].name} | ${skin.name}` : WEAPONS[key].name;
+  }
+
   _syncWeaponHud() {
-    this.hud.setWeapon(this.weapon.name, this.weapon.slot);
+    this.hud.setWeapon(this._displayName(this.currentKey), this.weapon.slot);
     this.hud.setWeapons(Object.values(WEAPONS).map((w) => ({
       slot: w.slot,
-      name: w.name,
+      name: this._displayName(w.key),
       owned: !!this.owned[w.key],
       active: w.key === this.currentKey,
     })));
@@ -305,6 +414,7 @@ export class WeaponSystem {
     const muzzle = this._muzzleWorld(new THREE.Vector3());
     this.effects.tracer(muzzle, hitPoint);
     this.effects.muzzle(muzzle);
+    this.effects.shell(muzzle, right);
     this.audio.shot(w.sound);
     if (w.loud) this.onLoudShot?.();
 
@@ -404,6 +514,10 @@ export class WeaponSystem {
     const reloadDip = this.reloadT > 0 ? -0.35 * Math.sin(Math.min(this.reloadT / this.weapon.reload, 1) * Math.PI) : 0;
     this.viewRoot.position.set(0.28, -0.26 + bob + raise * 0.3, -0.55 + this._kick * 0.07);
     this.viewRoot.rotation.x = this._kick * 0.16 + reloadDip + raise;
+    // лёгкий крен при боковом движении — оружие «живее»
+    const p = this.player;
+    const lateral = p.vel.x * Math.cos(p.yaw) - p.vel.z * Math.sin(p.yaw);
+    this.viewRoot.rotation.z = damp(this.viewRoot.rotation.z, -lateral * 0.008, 8, dt);
 
     this.hud.crosshair(this.computeSpread(), !this.scoped && !this.weapon.melee);
   }

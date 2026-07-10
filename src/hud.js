@@ -40,6 +40,7 @@ export class HUD {
       gameover: $('gameover'),
       gameoverTitle: $('gameover-title'),
       gameoverScore: $('gameover-score'),
+      gameoverSub: $('gameover-sub'),
     };
     this._hitT = null;
     this._dmgT = null;
@@ -196,11 +197,13 @@ export class HUD {
   }
 
   // экран окончания матча
-  gameOver(visible, won, scoreText) {
+  gameOver(visible, won, scoreText, sub = '') {
     this.el.gameover.style.display = visible ? 'flex' : 'none';
     if (!visible) return;
     this.el.gameoverTitle.textContent = won ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
     this.el.gameoverTitle.className = won ? 'win' : 'lose';
     this.el.gameoverScore.textContent = scoreText;
+    this.el.gameoverSub.textContent = sub;
+    this.el.gameoverSub.style.display = sub ? '' : 'none';
   }
 }

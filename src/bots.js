@@ -71,19 +71,42 @@ class Bot {
     const pants = new THREE.MeshLambertMaterial({ color: 0x4a4438 });
     const skin = new THREE.MeshLambertMaterial({ color: 0xcf9f7a });
     const gunM = new THREE.MeshLambertMaterial({ color: 0x2b2d31 });
+    const vestM = new THREE.MeshLambertMaterial({ color: this.team === 'CT' ? 0x2a3446 : 0x3a3428 });
+    const bandM = new THREE.MeshLambertMaterial({ color: col.band });
 
     this.mesh = new THREE.Group();
-    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.8, 0.3), pants);
-    legs.position.y = 0.4;
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.64, 0.34), shirt);
-    torso.position.y = 1.12;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8), skin);
-    head.position.y = 1.62;
-    const band = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.34), new THREE.MeshLambertMaterial({ color: col.band }));
-    band.position.y = 1.7;
-    const gun = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.7), gunM);
-    gun.position.set(0.22, 1.3, -0.25);
-    for (const m of [legs, torso, head, band, gun]) {
+    const parts = [];
+    const add = (geo, mat, x, y, z, rx = 0) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.rotation.x = rx;
+      parts.push(m);
+      return m;
+    };
+    // ноги раздельно
+    add(new THREE.BoxGeometry(0.15, 0.8, 0.24), pants, 0.1, 0.4, 0);
+    add(new THREE.BoxGeometry(0.15, 0.8, 0.24), pants, -0.1, 0.4, 0);
+    // торс + бронежилет
+    add(new THREE.BoxGeometry(0.56, 0.64, 0.3), shirt, 0, 1.12, 0);
+    add(new THREE.BoxGeometry(0.5, 0.4, 0.36), vestM, 0, 1.18, 0);
+    // руки тянутся к оружию
+    add(new THREE.BoxGeometry(0.11, 0.11, 0.46), shirt, 0.29, 1.28, -0.1, 0.3);
+    add(new THREE.BoxGeometry(0.11, 0.11, 0.4), shirt, -0.26, 1.26, -0.14, 0.45);
+    add(new THREE.SphereGeometry(0.065, 6, 5), skin, 0.27, 1.2, -0.3);
+    add(new THREE.SphereGeometry(0.065, 6, 5), skin, -0.22, 1.16, -0.3);
+    // голова: у CT — каска, у T — повязка
+    add(new THREE.SphereGeometry(0.19, 10, 8), skin, 0, 1.62, 0);
+    if (this.team === 'CT') {
+      add(new THREE.SphereGeometry(0.215, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55), bandM, 0, 1.63, 0);
+    } else {
+      add(new THREE.BoxGeometry(0.34, 0.08, 0.34), bandM, 0, 1.7, 0);
+    }
+    // оружие: корпус, ствол, магазин
+    add(new THREE.BoxGeometry(0.07, 0.09, 0.42), gunM, 0.22, 1.3, -0.14);
+    const barrel = add(new THREE.CylinderGeometry(0.018, 0.018, 0.32, 8), gunM, 0.22, 1.32, -0.5);
+    barrel.rotation.x = Math.PI / 2;
+    add(new THREE.BoxGeometry(0.05, 0.13, 0.06), gunM, 0.22, 1.21, -0.1, 0.35);
+    for (const m of parts) {
       m.castShadow = true;
       this.mesh.add(m);
     }
