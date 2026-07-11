@@ -116,7 +116,8 @@ class Bot {
     hpc.width = 64; hpc.height = 8;
     this.hpCtx = hpc.getContext('2d');
     this.hpTex = new THREE.CanvasTexture(hpc);
-    this.hpBar = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.hpTex, depthTest: false }));
+    // depthTest включён: полоска не должна просвечивать сквозь стены и выдавать позицию
+    this.hpBar = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.hpTex }));
     this.hpBar.scale.set(0.8, 0.1, 1);
     this.hpBar.position.y = 2.05;
     this.mesh.add(this.hpBar);
