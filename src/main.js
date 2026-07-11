@@ -10,6 +10,7 @@ import { AudioSys } from './audio.js';
 import { Effects } from './effects.js';
 import { CaseSystem } from './cases.js';
 import { CasesUI } from './casesui.js';
+import { Spectator } from './spectator.js';
 import { damp } from './utils.js';
 
 // --- рендер ---
@@ -76,6 +77,9 @@ const game = new GameState({
   player, bots, weapons, hud, audio, effects, scene, sites, spawns, cases,
 });
 bots.setGame(game);
+
+// режим наблюдения за союзниками после смерти
+const spectator = new Spectator({ camera, player, bots, weapons, hud, colliders, game });
 
 const radar = new Radar(document.getElementById('radar'), colliders, sites);
 
@@ -200,6 +204,7 @@ function tick() {
     }
     bots.update(dt);
     game.update(dt, input);
+    spectator.update(dt, input);
     effects.update(dt);
 
     // зум AWP
@@ -223,4 +228,4 @@ hud.setMoney(800);
 tick();
 
 // хук для отладки/тестов
-window.__game = { state, game, player, bots, weapons, cases };
+window.__game = { state, game, player, bots, weapons, cases, spectator };
