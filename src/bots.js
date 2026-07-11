@@ -16,7 +16,13 @@ export const DIFFICULTY = {
   hard:   { teamSize: 5, reaction: 0.27, spread: 0.017, dmg: 1.3,  view: 62, fovCos: Math.cos(1.6),  turn: 7.0, burst: [4, 7], rate: 0.11, hearDist: 55, strafe: 1.0 },
 };
 
-const BOT_DMG = 28; // базовый урон пули бота
+// Арсенал ботов: урон, темп и очереди зависят от оружия.
+// weaponKey выдаётся на раунд в roundStart и виден в режиме наблюдения.
+const BOT_WEAPONS = {
+  usp: { dmg: 20, rateMult: 1.5, pauseMult: 1.2, burst: [1, 2], sound: 'usp' },
+  ak:  { dmg: 28, rateMult: 1.0, pauseMult: 1.0, burst: null,   sound: 'ak' },
+  awp: { dmg: 85, rateMult: 5.5, pauseMult: 3.0, burst: [1, 1], sound: 'awp' },
+};
 const HALF = new THREE.Vector3(0.4, 0.9, 0.4);
 
 // Цвета формы по сторонам
@@ -37,6 +43,7 @@ class Bot {
     this.alive = true;
     this.kills = 0;
     this.deaths = 0;
+    this.weaponKey = 'usp'; // назначается на раунд в roundStart
     this.state = 'objective';
     this.path = [];
     this.target = null;       // текущая цель боя (игрок или бот)
@@ -331,6 +338,7 @@ class Bot {
   // --- стрельба по цели (игроку или боту) ---
   _shoot(t) {
     const mgr = this.mgr;
+    const bw = BOT_WEAPONS[this.weaponKey];
     const eye = this.eyePos(new THREE.Vector3());
     const target = t.eyePos(new THREE.Vector3());
     target.y -= rand(0, 0.5); // целятся в голову/грудь
@@ -355,17 +363,17 @@ class Bot {
     mgr.effects.tracer(muzzle, hitPoint, 0xffb37a);
     // громкость по расстоянию до игрока (слушателя)
     const hearDist = eye.distanceTo(mgr.player.pos);
-    mgr.audio.shot('ak', clamp(1 - hearDist / 70, 0.05, 0.85));
+    mgr.audio.shot(bw.sound, clamp(1 - hearDist / 70, 0.05, 0.85));
 
     if (hit) {
       const isHead = hitPoint.y > t.pos.y + 0.5;
       const falloff = clamp(1 - (tEnd - 30) / 130, 0.5, 1);
       if (t === mgr.player) {
-        let dmg = BOT_DMG * mgr.diff.dmg * falloff;
+        let dmg = bw.dmg * mgr.diff.dmg * falloff;
         if (isHead) dmg *= 2.5;
         mgr.game?.hurtPlayer(dmg, this);
       } else {
-        let dmg = BOT_DMG * falloff;
+        let dmg = bw.dmg * falloff;
         if (isHead) dmg *= 2.5;
         const died = t.takeDamage(dmg, isHead, this);
         if (died) {
@@ -566,12 +574,14 @@ class Bot {
 
           this.reactT -= dt;
           if (this.reactT <= 0) {
-            // стрельба очередями
+            // стрельба очередями; длина очереди и темп зависят от оружия
+            const bw = BOT_WEAPONS[this.weaponKey];
             this.shotT -= dt;
             if (this.burstLeft <= 0) {
               this.burstPause -= dt;
               if (this.burstPause <= 0) {
-                this.burstLeft = randInt(diff.burst[0], diff.burst[1]);
+                const bb = bw.burst || diff.burst;
+                this.burstLeft = randInt(bb[0], bb[1]);
               }
             } else if (this.shotT <= 0) {
               // стреляем только если корпус повёрнут к цели
@@ -579,8 +589,8 @@ class Bot {
               if ((fx * dx + fz * dz) / dist > 0.9) {
                 this._shoot(t);
                 this.burstLeft--;
-                this.shotT = diff.rate * rand(0.9, 1.15);
-                if (this.burstLeft <= 0) this.burstPause = rand(0.35, 0.9);
+                this.shotT = diff.rate * bw.rateMult * rand(0.9, 1.15);
+                if (this.burstLeft <= 0) this.burstPause = rand(0.35, 0.9) * bw.pauseMult;
               }
             }
           }
@@ -723,8 +733,13 @@ export class BotManager {
   roundStart() {
     const g = this.game;
     const siteC = (s) => new THREE.Vector3(this.sites[s].cx, 0.9, this.sites[s].cz);
+    // закупка ботов: пистолетный раунд — USP, дальше в основном AK,
+    // изредка AWP или «эко» с пистолетом
+    const pistolRound = g.roundNum === 1 || g.roundNum === g.rules.halfRounds + 1;
     let tIdx = 0, ctIdx = 0, ctFlip = 0;
     for (const b of this.bots) {
+      const r = Math.random();
+      b.weaponKey = pistolRound ? 'usp' : r < 0.15 ? 'awp' : r < 0.27 ? 'usp' : 'ak';
       if (b.team === 'T') {
         const sp = this.spawns.T.bots[tIdx++ % this.spawns.T.bots.length];
         b.spawn(sp, 0);

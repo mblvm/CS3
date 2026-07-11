@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clamp, randInt } from './utils.js';
+import { WEAPONS } from './weapons.js';
 
 // Правила матча
 export const RULES = {
@@ -271,7 +272,7 @@ export class GameState {
       if (attackerBot) attackerBot.kills++;
       const killer = attackerBot ? attackerBot.name : (sourceName || '');
       this.hud.killfeed(`<b>${killer}</b> убил вас`);
-      this.hud.death(true, 'Наблюдайте за раундом');
+      this.hud.death(true, 'Переключение на обзор союзника…');
       this.hud.bombHint(null);
       this.hud.hideProgress();
       this.onEntityDeath(p);
@@ -287,7 +288,8 @@ export class GameState {
 
   // фраг бота по боту
   onBotKilled(attacker, victim, headshot) {
-    this.hud.killfeed(`${attacker.name} убил <b>${victim.name}</b>${headshot ? ' (в голову)' : ''}`);
+    const w = WEAPONS[attacker.weaponKey].name;
+    this.hud.killfeed(`${attacker.name} убил <b>${victim.name}</b> (${w}${headshot ? ', в голову' : ''})`);
   }
 
   // --- завершение раунда ---
@@ -488,10 +490,15 @@ export class GameState {
   scoreboardData() {
     const mySide = this.playerSide;
     const enemySide = mySide === 'T' ? 'CT' : 'T';
+    // оружие показываем только у своей команды (живых)
     const row = (b) => ({ name: b.name, kills: b.kills, deaths: b.deaths });
+    const myRow = (b) => ({ ...row(b), weapon: b.alive ? WEAPONS[b.weaponKey].name : '—' });
     const my = [
-      { name: 'Вы', kills: this.playerKills, deaths: this.playerDeaths, me: true, money: this.money },
-      ...this.bots.bots.filter((b) => b.team === mySide).map(row),
+      {
+        name: 'Вы', kills: this.playerKills, deaths: this.playerDeaths, me: true,
+        money: this.money, weapon: this.player.alive ? this.weapons.weapon.name : '—',
+      },
+      ...this.bots.bots.filter((b) => b.team === mySide).map(myRow),
     ].sort((a, b) => b.kills - a.kills);
     const enemy = this.bots.bots.filter((b) => b.team === enemySide).map(row)
       .sort((a, b) => b.kills - a.kills);
